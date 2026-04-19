@@ -1,0 +1,35 @@
+# API & System Health Monitor - Configuration
+# Edit this file to add your own endpoints and adjust alert thresholds.
+
+poll_interval_seconds: 30
+
+api_endpoints:
+  - name: "JSONPlaceholder Posts"
+    url: "https://jsonplaceholder.typicode.com/posts/1"
+    method: GET
+    expected_status: 200
+    timeout_ms: 2000
+
+  - name: "HTTPBin Status Check"
+    url: "https://httpbin.org/status/200"
+    method: GET
+    expected_status: 200
+    timeout_ms: 1500
+
+  - name: "GitHub API"
+    url: "https://api.github.com"
+    method: GET
+    expected_status: 200
+    timeout_ms: 3000
+
+thresholds:
+  cpu_warning_pct: 70
+  cpu_critical_pct: 90
+  memory_warning_pct: 75
+  memory_critical_pct: 90
+  api_latency_warning_ms: 500
+  api_latency_critical_ms: 1500
+
+logging:
+  log_file: "logs/health_log.json"
+  report_dir: "reports/"
