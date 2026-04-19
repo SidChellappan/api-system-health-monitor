@@ -1,0 +1,60 @@
+---
+- name: Deploy API & System Health Monitor
+  hosts: monitor_nodes
+  become: true
+  vars:
+    app_root: /opt/api-system-health-monitor
+    app_user: monitor
+    repo_url: https://github.com/SidChellappan/api-system-health-monitor.git
+    poll_interval_seconds: 30
+    api_endpoints: []
+    grpc_endpoints: []
+
+  tasks:
+    - name: Ensure required packages are installed
+      package:
+        name:
+          - git
+          - python3
+          - python3-pip
+          - python3-venv
+        state: present
+
+    - name: Ensure application user exists
+      user:
+        name: "{{ app_user }}"
+        system: true
+        create_home: false
+
+    - name: Check out repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_root }}"
+        version: main
+
+    - name: Install Python dependencies
+      pip:
+        requirements: "{{ app_root }}/requirements.txt"
+        virtualenv: "{{ app_root }}/.venv"
+        virtualenv_command: python3 -m venv
+
+    - name: Render environment-specific configuration
+      template:
+        src: config.yaml.j2
+        dest: "{{ app_root }}/config.yaml"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0644"
+
+    - name: Install systemd service
+      template:
+        src: monitor.service.j2
+        dest: /etc/systemd/system/api-system-health-monitor.service
+        mode: "0644"
+
+    - name: Restart monitor service
+      systemd:
+        daemon_reload: true
+        name: api-system-health-monitor
+        enabled: true
+        state: restarted

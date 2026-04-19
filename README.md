@@ -1,75 +1,113 @@
 # API & System Health Monitor
 
-> A Python-based REST API and system health monitoring tool with gRPC awareness, real-time alerting, and exportable diagnostic reports — built for multi-platform infrastructure.
+Python-based infrastructure monitor for REST APIs, gRPC services, and local system health, with structured alerting, HTML/JSON reports, automated tests, GitHub Actions CI, and Ansible deployment artifacts.
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)
+## Why This Project Exists
 
----
+I expanded this project to match the technical themes in the Hewlett Packard Enterprise High School Software Engineer Internship:
 
-## Overview
+- Python application development
+- REST API and gRPC service awareness
+- Linux and systems-oriented thinking
+- testing, debugging, and maintenance
+- GitHub workflow and CI
+- infrastructure as code with Ansible
+- documentation and architecture communication
 
-The **API & System Health Monitor** is a developer/ops-facing tool that continuously polls REST API endpoints and system-level metrics, evaluates their health status, logs structured results, and generates exportable HTML/JSON reports. Inspired by the kind of infrastructure diagnostics used in enterprise server environments (e.g., HPE ProLiant), this tool is designed to run on any platform and be extended with minimal effort.
-
----
+The result is a more complete engineering project instead of a single monitoring script.
 
 ## Features
 
-- **REST API Health Polling** — Configure any number of endpoints; checks HTTP status codes, response times, and JSON schema validity
-- **System Metrics Collection** — CPU usage, memory, disk I/O, and network latency via `psutil`
-- **Threshold-Based Alerting** — Define warning/critical thresholds; alerts printed to console and logged to file
-- **Structured JSON Logging** — Every poll cycle produces a timestamped JSON entry for downstream analysis
-- **HTML Report Generation** — Single-command export of a clean, color-coded diagnostic report
-- **Multi-Platform Support** — Tested on Linux (Ubuntu 22.04), Windows 10/11, macOS 13+
-- **Configurable via YAML** — No code changes needed to add endpoints or change thresholds
-- **Extensible gRPC Stub** — Placeholder gRPC service definition (`health.proto`) for enterprise integration
-
----
+- Configurable REST API health checks with status-code validation
+- JSON schema and expected-key validation for API responses
+- gRPC transport readiness checks for service endpoints
+- Local system metrics: CPU, memory, disk, process count, load average, network I/O
+- Host inventory capture for hardware and runtime visibility
+- Structured alerting for endpoint and system threshold breaches
+- NDJSON logging for each polling cycle
+- Jinja2-generated HTML reporting plus JSON summaries
+- Multi-platform CI across Windows, macOS, and Linux
+- Ansible deployment example with systemd service wiring
+- Bash and PowerShell helper scripts for local workflows
 
 ## Project Structure
 
-```
+```text
 api-system-health-monitor/
-├── monitor.py              # Main polling loop and orchestration
-├── api_checker.py          # REST endpoint health checks
-├── sys_metrics.py          # System resource collection (psutil)
-├── alerting.py             # Threshold evaluation and alert dispatch
-├── report_generator.py     # HTML + JSON report export
-├── config.yaml             # User-facing configuration file
-├── health.proto            # gRPC service definition (stub)
-├── requirements.txt        # Python dependencies
-├── tests/
-│   ├── test_api_checker.py
-│   └── test_sys_metrics.py
-└── README.md
+|-- .github/
+|   |-- pull_request_template.md
+|   `-- workflows/ci.yml
+|-- deploy/ansible/
+|   |-- site.yml
+|   `-- templates/
+|       |-- config.yaml.j2
+|       `-- monitor.service.j2
+|-- docs/
+|   |-- ARCHITECTURE.md
+|   |-- OPERATIONS.md
+|   `-- ROLE_ALIGNMENT.md
+|-- scripts/
+|   |-- run_monitor.ps1
+|   |-- run_monitor.sh
+|   `-- smoke_test.sh
+|-- templates/report.html.j2
+|-- tests/
+|-- alerting.py
+|-- api_checker.py
+|-- config.yaml
+|-- config_loader.py
+|-- grpc_checker.py
+|-- health.proto
+|-- host_inventory.py
+|-- monitor.py
+|-- report_generator.py
+|-- sys_metrics.py
+|-- CONTRIBUTING.md
+|-- LICENSE
+|-- README.md
+`-- requirements.txt
 ```
-
----
 
 ## Quickstart
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/SidChellappan/api-system-health-monitor.git
 cd api-system-health-monitor
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Edit config.yaml with your endpoints and thresholds
-
-# 4. Run the monitor
-python monitor.py
-
-# 5. Generate a report
-python report_generator.py --output report.html
+python -m pip install -r requirements.txt
+python -m pytest -v
+python monitor.py --config config.yaml run --cycles 1 --report
 ```
 
----
+## CLI Usage
 
-## Configuration (`config.yaml`)
+Run monitoring cycles:
+
+```bash
+python monitor.py --config config.yaml run
+python monitor.py --config config.yaml run --cycles 3 --report
+```
+
+Generate reports from existing logs:
+
+```bash
+python monitor.py --config config.yaml report
+```
+
+Export host inventory:
+
+```bash
+python monitor.py inventory
+python monitor.py inventory --output reports/inventory.json
+```
+
+## Configuration Example
 
 ```yaml
 poll_interval_seconds: 30
+max_cycles: 0
+
+system:
+  disk_path: "."
 
 api_endpoints:
   - name: "JSONPlaceholder Posts"
@@ -77,83 +115,85 @@ api_endpoints:
     method: GET
     expected_status: 200
     timeout_ms: 2000
-  - name: "HTTPBin Status"
-    url: "https://httpbin.org/status/200"
-    method: GET
-    expected_status: 200
-    timeout_ms: 1500
+    expected_json_keys: [userId, id, title, body]
+
+grpc_endpoints:
+  - name: "Local Demo gRPC Server"
+    target: "localhost:50051"
+    timeout_ms: 750
 
 thresholds:
   cpu_warning_pct: 70
   cpu_critical_pct: 90
   memory_warning_pct: 75
   memory_critical_pct: 90
+  disk_warning_pct: 80
+  disk_critical_pct: 92
   api_latency_warning_ms: 500
   api_latency_critical_ms: 1500
+  grpc_latency_warning_ms: 250
+  grpc_latency_critical_ms: 1000
 
 logging:
-  log_file: "logs/health_log.json"
-  report_dir: "reports/"
+  log_file: "logs/health_log.ndjson"
+  alert_file: "logs/alerts.log"
+  report_dir: "reports"
 ```
 
----
+## Example Output
 
-## Sample Output
-
+```text
+2026-04-19 15:40:12,101 [INFO] --- POLL CYCLE #1 ---
+2026-04-19 15:40:12,102 [INFO]   [OK      ] API  JSONPlaceholder Posts        status=200 latency=182.4ms
+2026-04-19 15:40:12,103 [INFO]   [CRITICAL] gRPC Local Demo gRPC Server       target=localhost:50051 latency=N/Ams
+2026-04-19 15:40:12,103 [INFO]   [SYSTEM ] CPU=14.2% MEM=46.8% DISK=52.1% PROCS=241
+2026-04-19 15:40:12,103 [ERROR]   --> Local Demo gRPC Server: Channel readiness timed out after 750ms.
 ```
-[2026-04-19 14:32:01] POLL CYCLE #12
-  [OK]   JSONPlaceholder Posts     200  |  312ms
-  [WARN] HTTPBin Status            200  |  521ms  (latency > 500ms threshold)
-  [OK]   CPU Usage                 43.2%
-  [OK]   Memory Usage              61.8%
-  [OK]   Disk Usage                48.3%
-  --> Alert dispatched: HTTPBin latency exceeded warning threshold
-```
-
----
-
-## Tech Stack
-
-| Component         | Technology              |
-|-------------------|-------------------------|
-| Language          | Python 3.10+            |
-| HTTP Requests     | `requests`, `httpx`     |
-| System Metrics    | `psutil`                |
-| Config Parsing    | `PyYAML`                |
-| Report Templating | `Jinja2`                |
-| gRPC Stub         | `grpcio`, `protobuf`    |
-| Testing           | `pytest`                |
-
----
-
-## gRPC Extension
-
-The included `health.proto` defines a `HealthCheckService` with a `Check` RPC — following the [gRPC Health Checking Protocol](https://grpc.io/docs/guides/health-checking/). This makes the monitor easy to integrate into larger service meshes or HPE-style server management stacks.
-
-```protobuf
-service HealthCheckService {
-  rpc Check (HealthCheckRequest) returns (HealthCheckResponse);
-  rpc Watch (HealthCheckRequest) returns (stream HealthCheckResponse);
-}
-```
-
----
 
 ## Testing
 
 ```bash
-pytest tests/ -v
+python -m pytest -v
+python -m compileall .
 ```
 
----
+The repo includes tests for:
 
-## Author
+- REST API validation behavior
+- threshold-based alerting
+- config loading and path normalization
+- gRPC readiness checks
+- report generation
+- system metric collection
 
-**Siddharth Chellappan** — Rising Junior, Princeton High School  
-GitHub: [@SidChellappan](https://github.com/SidChellappan)
+## DevOps and Deployment Signals
 
----
+- GitHub Actions matrix CI: `.github/workflows/ci.yml`
+- Ansible deployment example: `deploy/ansible/site.yml`
+- Linux service template: `deploy/ansible/templates/monitor.service.j2`
+- Bash automation scripts: `scripts/run_monitor.sh`, `scripts/smoke_test.sh`
+- PowerShell workflow helper: `scripts/run_monitor.ps1`
+
+## Documentation
+
+- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Operations guide: [docs/OPERATIONS.md](docs/OPERATIONS.md)
+- HPE role alignment: [docs/ROLE_ALIGNMENT.md](docs/ROLE_ALIGNMENT.md)
+- Contribution workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+## Tech Stack
+
+- Python 3.10+
+- `requests`
+- `psutil`
+- `PyYAML`
+- `Jinja2`
+- `jsonschema`
+- `grpcio`
+- `pytest`
+- GitHub Actions
+- Ansible
 
 ## License
 
-MIT License — see `LICENSE` for details.
+MIT License. See [LICENSE](LICENSE).

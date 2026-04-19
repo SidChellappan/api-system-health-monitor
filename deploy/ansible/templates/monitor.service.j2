@@ -1,0 +1,15 @@
+[Unit]
+Description=API and System Health Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+WorkingDirectory={{ app_root }}
+ExecStart={{ app_root }}/.venv/bin/python {{ app_root }}/monitor.py --config {{ app_root }}/config.yaml run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

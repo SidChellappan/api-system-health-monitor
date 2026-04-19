@@ -1,109 +1,141 @@
-"""report_generator.py - JSON log management and HTML report export."""
+"""Log management and report generation."""
+
+from __future__ import annotations
 
 import json
-import argparse
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
+from statistics import mean
+from typing import Any
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 
-def append_log_entry(log_file: str, entry: dict) -> None:
-    """Append a single poll cycle entry to the NDJSON log file."""
-    with open(log_file, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 
-def load_log_entries(log_file: str) -> list[dict]:
-    """Load all entries from the NDJSON log file."""
-    entries = []
-    path = Path(log_file)
-    if not path.exists():
-        return entries
-    with open(path) as f:
-        for line in f:
+def append_log_entry(log_file: str, entry: dict[str, Any]) -> None:
+    """Append a single monitoring cycle entry to an NDJSON log."""
+    log_path = Path(log_file)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry) + "\n")
+
+
+def load_log_entries(log_file: str) -> list[dict[str, Any]]:
+    """Load monitoring entries from an NDJSON log file."""
+    log_path = Path(log_file)
+    if not log_path.exists():
+        return []
+
+    entries: list[dict[str, Any]] = []
+    with log_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
             line = line.strip()
-            if line:
-                try:
-                    entries.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
     return entries
 
 
-def generate_html_report(log_file: str, output_path: str) -> None:
-    """Generate a color-coded HTML diagnostic report from log entries."""
+def _build_endpoint_summary(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for result in results:
+        stats = grouped.setdefault(
+            result["name"],
+            {
+                "name": result["name"],
+                "transport": result.get("transport", "unknown"),
+                "checks": 0,
+                "non_ok_checks": 0,
+                "latencies": [],
+                "last_status": "unknown",
+                "last_detail": "",
+            },
+        )
+        stats["checks"] += 1
+        if result.get("status") != "ok":
+            stats["non_ok_checks"] += 1
+        if result.get("latency_ms") is not None:
+            stats["latencies"].append(float(result["latency_ms"]))
+        stats["last_status"] = result.get("status", "unknown")
+        stats["last_detail"] = result.get("detail", "")
+
+    summary: list[dict[str, Any]] = []
+    for stats in grouped.values():
+        checks = stats["checks"]
+        failures = stats["non_ok_checks"]
+        summary.append(
+            {
+                "name": stats["name"],
+                "transport": stats["transport"],
+                "checks": checks,
+                "availability_pct": round(((checks - failures) / checks) * 100, 1) if checks else 0.0,
+                "avg_latency_ms": round(mean(stats["latencies"]), 1) if stats["latencies"] else None,
+                "last_status": stats["last_status"],
+                "last_detail": stats["last_detail"],
+            }
+        )
+    return sorted(summary, key=lambda item: (item["transport"], item["name"]))
+
+
+def build_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """Create a report summary from monitoring entries."""
+    latest = entries[-1] if entries else {}
+    all_api_results = [result for entry in entries for result in entry.get("api_results", [])]
+    all_grpc_results = [result for entry in entries for result in entry.get("grpc_results", [])]
+    all_alerts = [alert for entry in entries for alert in entry.get("alerts", [])]
+
+    critical_alerts = [alert for alert in all_alerts if alert.get("severity") == "critical"]
+    warning_alerts = [alert for alert in all_alerts if alert.get("severity") == "warning"]
+
+    return {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "cycle_count": len(entries),
+        "latest_cycle": latest.get("cycle"),
+        "latest_timestamp": latest.get("timestamp"),
+        "latest_system_metrics": latest.get("sys_metrics", {}),
+        "host": latest.get("host", {}),
+        "api_summary": _build_endpoint_summary(all_api_results),
+        "grpc_summary": _build_endpoint_summary(all_grpc_results),
+        "alert_count": len(all_alerts),
+        "critical_alert_count": len(critical_alerts),
+        "warning_alert_count": len(warning_alerts),
+        "recent_entries": entries[-25:],
+    }
+
+
+def _jinja_environment() -> Environment:
+    return Environment(
+        loader=FileSystemLoader(str(TEMPLATE_DIR)),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+
+
+def generate_html_report(log_file: str, output_path: str) -> dict[str, Any]:
+    """Generate an HTML report from an NDJSON log file."""
     entries = load_log_entries(log_file)
-    rows = ""
-    for e in entries[-100:]:  # Last 100 cycles
-        ts = e.get("timestamp", "N/A")
-        cycle = e.get("cycle", "?")
-        alerts = e.get("alerts", [])
-        sys = e.get("sys_metrics", {})
-        api_summary = ", ".join(
-            f"{r['name']}: {r.get('status','?').upper()}"
-            for r in e.get("api_results", [])
-        )
-        alert_class = "critical" if any("CRITICAL" in a for a in alerts) else (
-            "warn" if alerts else "ok"
-        )
-        rows += f"""
-        <tr class="{alert_class}">
-          <td>{cycle}</td>
-          <td>{ts}</td>
-          <td>{api_summary}</td>
-          <td>{sys.get('cpu_pct', 'N/A')}%</td>
-          <td>{sys.get('memory_pct', 'N/A')}%</td>
-          <td>{sys.get('disk_pct', 'N/A')}%</td>
-          <td>{'; '.join(alerts) if alerts else 'None'}</td>
-        </tr>"""
+    summary = build_summary(entries)
 
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>API &amp; System Health Report</title>
-  <style>
-    body {{ font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }}
-    h1 {{ color: #333; }}
-    table {{ border-collapse: collapse; width: 100%; background: #fff; }}
-    th {{ background: #0078d4; color: white; padding: 10px; text-align: left; }}
-    td {{ padding: 8px 10px; border-bottom: 1px solid #ddd; }}
-    tr.ok {{ background: #e6ffe6; }}
-    tr.warn {{ background: #fff8cc; }}
-    tr.critical {{ background: #ffe6e6; }}
-    .footer {{ margin-top: 20px; font-size: 0.85em; color: #666; }}
-  </style>
-</head>
-<body>
-  <h1>API &amp; System Health Monitor - Diagnostic Report</h1>
-  <p>Generated: {datetime.utcnow().isoformat()}Z | Cycles shown: {len(entries)}</p>
-  <table>
-    <thead>
-      <tr>
-        <th>Cycle</th>
-        <th>Timestamp</th>
-        <th>API Status</th>
-        <th>CPU</th>
-        <th>Memory</th>
-        <th>Disk</th>
-        <th>Alerts</th>
-      </tr>
-    </thead>
-    <tbody>
-      {rows}
-    </tbody>
-  </table>
-  <div class="footer">API &amp; System Health Monitor &mdash; Siddharth Chellappan &mdash; github.com/SidChellappan</div>
-</body>
-</html>"""
+    environment = _jinja_environment()
+    template = environment.get_template("report.html.j2")
+    html = template.render(summary=summary)
 
-    with open(output_path, "w") as f:
-        f.write(html)
-    print(f"Report written to {output_path}")
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(html, encoding="utf-8")
+    return summary
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate health monitor HTML report")
-    parser.add_argument("--log", default="logs/health_log.json", help="Path to NDJSON log")
-    parser.add_argument("--output", default="reports/report.html", help="Output HTML path")
-    args = parser.parse_args()
-    generate_html_report(args.log, args.output)
+def generate_json_summary(log_file: str, output_path: str) -> dict[str, Any]:
+    """Generate a JSON summary report from an NDJSON log file."""
+    entries = load_log_entries(log_file)
+    summary = build_summary(entries)
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    return summary

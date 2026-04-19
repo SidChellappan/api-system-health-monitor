@@ -1,7 +1,12 @@
-# API & System Health Monitor - Configuration
-# Edit this file to add your own endpoints and adjust alert thresholds.
+# API & System Health Monitor - Portfolio configuration
+# This sample shows REST monitoring, gRPC transport checks, threshold alerting,
+# and report generation for a cross-platform infrastructure monitor.
 
 poll_interval_seconds: 30
+max_cycles: 0
+
+system:
+  disk_path: "."
 
 api_endpoints:
   - name: "JSONPlaceholder Posts"
@@ -9,27 +14,60 @@ api_endpoints:
     method: GET
     expected_status: 200
     timeout_ms: 2000
+    expected_json_keys:
+      - userId
+      - id
+      - title
+      - body
+    expected_json_schema:
+      type: object
+      required:
+        - userId
+        - id
+        - title
+        - body
+      properties:
+        userId:
+          type: integer
+        id:
+          type: integer
+        title:
+          type: string
+        body:
+          type: string
 
-  - name: "HTTPBin Status Check"
+  - name: "HTTPBin Status"
     url: "https://httpbin.org/status/200"
     method: GET
     expected_status: 200
     timeout_ms: 1500
 
-  - name: "GitHub API"
+  - name: "GitHub REST API"
     url: "https://api.github.com"
     method: GET
     expected_status: 200
     timeout_ms: 3000
+    expected_substring: "current_user_url"
+
+grpc_endpoints:
+  - name: "Local Demo gRPC Server"
+    target: "localhost:50051"
+    timeout_ms: 750
+    secure: false
 
 thresholds:
   cpu_warning_pct: 70
   cpu_critical_pct: 90
   memory_warning_pct: 75
   memory_critical_pct: 90
+  disk_warning_pct: 80
+  disk_critical_pct: 92
   api_latency_warning_ms: 500
   api_latency_critical_ms: 1500
+  grpc_latency_warning_ms: 250
+  grpc_latency_critical_ms: 1000
 
 logging:
-  log_file: "logs/health_log.json"
-  report_dir: "reports/"
+  log_file: "logs/health_log.ndjson"
+  alert_file: "logs/alerts.log"
+  report_dir: "reports"

@@ -1,0 +1,47 @@
+poll_interval_seconds: {{ poll_interval_seconds }}
+max_cycles: 0
+
+system:
+  disk_path: "."
+
+{% if api_endpoints %}
+api_endpoints:
+{% for endpoint in api_endpoints %}
+  - name: "{{ endpoint.name }}"
+    url: "{{ endpoint.url }}"
+    method: "{{ endpoint.method | default('GET') }}"
+    expected_status: {{ endpoint.expected_status | default(200) }}
+    timeout_ms: {{ endpoint.timeout_ms | default(2000) }}
+{% endfor %}
+{% else %}
+api_endpoints: []
+{% endif %}
+
+{% if grpc_endpoints %}
+grpc_endpoints:
+{% for endpoint in grpc_endpoints %}
+  - name: "{{ endpoint.name }}"
+    target: "{{ endpoint.target }}"
+    timeout_ms: {{ endpoint.timeout_ms | default(750) }}
+    secure: {{ endpoint.secure | default(false) }}
+{% endfor %}
+{% else %}
+grpc_endpoints: []
+{% endif %}
+
+thresholds:
+  cpu_warning_pct: 70
+  cpu_critical_pct: 90
+  memory_warning_pct: 75
+  memory_critical_pct: 90
+  disk_warning_pct: 80
+  disk_critical_pct: 92
+  api_latency_warning_ms: 500
+  api_latency_critical_ms: 1500
+  grpc_latency_warning_ms: 250
+  grpc_latency_critical_ms: 1000
+
+logging:
+  log_file: "logs/health_log.ndjson"
+  alert_file: "logs/alerts.log"
+  report_dir: "reports"

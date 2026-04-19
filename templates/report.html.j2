@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API &amp; System Health Report</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --surface: #ffffff;
+      --ink: #112138;
+      --muted: #5c6b80;
+      --accent: #0f5cc0;
+      --accent-soft: #dce9fb;
+      --good: #1b7f4a;
+      --good-soft: #dff5e7;
+      --warn: #b36b00;
+      --warn-soft: #fff1d6;
+      --critical: #b02a37;
+      --critical-soft: #fde0e4;
+      --border: #d7deea;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #edf4ff 0%, var(--bg) 100%);
+      color: var(--ink);
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+
+    .hero {
+      background: radial-gradient(circle at top right, #d8e9ff, #ffffff 60%);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 20px 40px rgba(15, 41, 75, 0.08);
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 2rem;
+    }
+
+    .hero p {
+      margin: 6px 0;
+      color: var(--muted);
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .card .label {
+      color: var(--muted);
+      font-size: 0.88rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .card .value {
+      margin-top: 10px;
+      font-size: 1.65rem;
+      font-weight: 700;
+    }
+
+    .section {
+      margin-top: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 12px 24px rgba(15, 41, 75, 0.05);
+    }
+
+    .section h2 {
+      margin-top: 0;
+      font-size: 1.2rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+      font-size: 0.95rem;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .ok {
+      background: var(--good-soft);
+      color: var(--good);
+    }
+
+    .warn {
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .critical {
+      background: var(--critical-soft);
+      color: var(--critical);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        padding: 18px 14px 32px;
+      }
+
+      .hero, .section, .card {
+        border-radius: 14px;
+      }
+
+      th, td {
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>API &amp; System Health Monitor</h1>
+      <p>Generated at {{ summary.generated_at_utc }}</p>
+      <p>
+        Latest cycle:
+        {% if summary.latest_cycle %}
+          #{{ summary.latest_cycle }} at {{ summary.latest_timestamp }}
+        {% else %}
+          no data captured yet
+        {% endif %}
+      </p>
+      <div class="card-grid">
+        <div class="card">
+          <div class="label">Cycles</div>
+          <div class="value">{{ summary.cycle_count }}</div>
+        </div>
+        <div class="card">
+          <div class="label">Alerts</div>
+          <div class="value">{{ summary.alert_count }}</div>
+        </div>
+        <div class="card">
+          <div class="label">Critical Alerts</div>
+          <div class="value">{{ summary.critical_alert_count }}</div>
+        </div>
+        <div class="card">
+          <div class="label">Warning Alerts</div>
+          <div class="value">{{ summary.warning_alert_count }}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Host Inventory</h2>
+      {% if summary.host %}
+      <table>
+        <tr><th>Hostname</th><td>{{ summary.host.hostname }}</td></tr>
+        <tr><th>Platform</th><td>{{ summary.host.platform }}</td></tr>
+        <tr><th>Python</th><td>{{ summary.host.python_version }}</td></tr>
+        <tr><th>CPU Cores</th><td>{{ summary.host.physical_cores }} physical / {{ summary.host.logical_cores }} logical</td></tr>
+        <tr><th>Total Memory</th><td>{{ summary.host.total_memory_gb }} GB</td></tr>
+        <tr><th>Network Interfaces</th><td>{{ summary.host.network_interfaces | join(', ') }}</td></tr>
+      </table>
+      {% else %}
+      <p class="muted">No host inventory data is available yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="section">
+      <h2>Latest System Metrics</h2>
+      {% if summary.latest_system_metrics %}
+      <table>
+        <tr><th>CPU</th><td>{{ summary.latest_system_metrics.cpu_pct }}%</td></tr>
+        <tr><th>Memory</th><td>{{ summary.latest_system_metrics.memory_pct }}%</td></tr>
+        <tr><th>Disk</th><td>{{ summary.latest_system_metrics.disk_pct }}% on {{ summary.latest_system_metrics.disk_path }}</td></tr>
+        <tr><th>Processes</th><td>{{ summary.latest_system_metrics.process_count }}</td></tr>
+        <tr><th>Network I/O</th><td>{{ summary.latest_system_metrics.net_bytes_sent }} bytes sent / {{ summary.latest_system_metrics.net_bytes_recv }} bytes received</td></tr>
+      </table>
+      {% else %}
+      <p class="muted">Run the monitor to populate system metrics.</p>
+      {% endif %}
+    </section>
+
+    <section class="section">
+      <h2>REST Endpoint Summary</h2>
+      {% if summary.api_summary %}
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Availability</th>
+            <th>Average Latency</th>
+            <th>Last Status</th>
+            <th>Last Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for endpoint in summary.api_summary %}
+          <tr>
+            <td>{{ endpoint.name }}</td>
+            <td>{{ endpoint.availability_pct }}%</td>
+            <td>{{ endpoint.avg_latency_ms if endpoint.avg_latency_ms is not none else 'N/A' }} ms</td>
+            <td>
+              <span class="pill {{ 'critical' if endpoint.last_status == 'critical' else 'warn' if endpoint.last_status == 'warn' else 'ok' }}">
+                {{ endpoint.last_status.upper() }}
+              </span>
+            </td>
+            <td>{{ endpoint.last_detail or 'None' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No REST endpoint data captured yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="section">
+      <h2>gRPC Summary</h2>
+      {% if summary.grpc_summary %}
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Availability</th>
+            <th>Average Latency</th>
+            <th>Last Status</th>
+            <th>Last Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for endpoint in summary.grpc_summary %}
+          <tr>
+            <td>{{ endpoint.name }}</td>
+            <td>{{ endpoint.availability_pct }}%</td>
+            <td>{{ endpoint.avg_latency_ms if endpoint.avg_latency_ms is not none else 'N/A' }} ms</td>
+            <td>
+              <span class="pill {{ 'critical' if endpoint.last_status == 'critical' else 'warn' if endpoint.last_status == 'warn' else 'ok' }}">
+                {{ endpoint.last_status.upper() }}
+              </span>
+            </td>
+            <td>{{ endpoint.last_detail or 'None' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No gRPC endpoint data captured yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="section">
+      <h2>Recent Cycles</h2>
+      {% if summary.recent_entries %}
+      <table>
+        <thead>
+          <tr>
+            <th>Cycle</th>
+            <th>Timestamp</th>
+            <th>Alerts</th>
+            <th>CPU</th>
+            <th>Memory</th>
+            <th>Disk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in summary.recent_entries %}
+          <tr>
+            <td>{{ entry.cycle }}</td>
+            <td>{{ entry.timestamp }}</td>
+            <td>
+              {% if entry.alerts %}
+              <ul class="list">
+                {% for alert in entry.alerts %}
+                <li><strong>{{ alert.severity.upper() }}</strong>: {{ alert.source }} - {{ alert.message }}</li>
+                {% endfor %}
+              </ul>
+              {% else %}
+              None
+              {% endif %}
+            </td>
+            <td>{{ entry.sys_metrics.cpu_pct }}%</td>
+            <td>{{ entry.sys_metrics.memory_pct }}%</td>
+            <td>{{ entry.sys_metrics.disk_pct }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No cycle history is available yet.</p>
+      {% endif %}
+    </section>
+  </div>
+</body>
+</html>
